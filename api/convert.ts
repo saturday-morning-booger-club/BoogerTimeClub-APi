@@ -12,12 +12,12 @@ const turndownService = new TurndownService({
 // Add custom rules for better markdown conversion
 turndownService.addRule('strikethrough', {
   filter: ['s', 'strike', 'del'],
-  replacement: (content) => `~~${content}~~`,
+  replacement: (content: string) => `~~${content}~~`,
 });
 
 turndownService.addRule('highlight', {
   filter: ['mark'],
-  replacement: (content) => `==${content}==`,
+  replacement: (content: string) => `==${content}==`,
 });
 
 interface ConversionResponse {
@@ -31,7 +31,7 @@ interface ConversionResponse {
 async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
   try {
     // Validate URL
-    const urlObj = new URL(url);
+    new URL(url);
     
     // Fetch the HTML content
     const response = await axios.get(url, {
@@ -53,7 +53,7 @@ async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
     $('noscript').remove();
 
     // Convert main content
-    let mainContent = $('main').html() || $('article').html() || $('body').html();
+    const mainContent = $('main').html() || $('article').html() || $('body').html();
 
     if (!mainContent) {
       return {
@@ -91,7 +91,7 @@ async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
   }
 }
 
-export default async (req: VercelRequest, res: VercelResponse) => {
+export default async (req: VercelRequest, res: VercelResponse): Promise<void> => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -104,7 +104,8 @@ export default async (req: VercelRequest, res: VercelResponse) => {
 
   // Only allow GET and POST
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   // Extract URL from query or body
@@ -113,23 +114,25 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     : (req.body?.url as string);
 
   if (!url) {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'Missing URL parameter. Please provide a "url" query parameter or in the request body.',
       example: '/api/convert?url=https://example.com',
     });
+    return;
   }
 
   try {
     const result = await fetchAndConvertHTML(url);
     
     if (!result.success) {
-      return res.status(400).json(result);
+      res.status(400).json(result);
+      return;
     }
 
-    return res.status(200).json(result);
+    res.status(200).json(result);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return res.status(500).json({
+    res.status(500).json({
       error: 'Internal server error',
       message: errorMessage,
     });
