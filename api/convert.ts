@@ -12,12 +12,20 @@ const turndownService = new TurndownService({
 // Add custom rules for better markdown conversion
 turndownService.addRule('strikethrough', {
   filter: ['s', 'strike', 'del'],
-  replacement: (content: string) => `~~${content}~~`,
+  replacement: (_content: string, _node) => {
+    const node = _node as cheerio.Element;
+    const text = (node as unknown as { textContent: string }).textContent || '';
+    return `~~${text}~~`;
+  },
 });
 
 turndownService.addRule('highlight', {
   filter: ['mark'],
-  replacement: (content: string) => `==${content}==`,
+  replacement: (_content: string, _node) => {
+    const node = _node as cheerio.Element;
+    const text = (node as unknown as { textContent: string }).textContent || '';
+    return `==${text}==`;
+  },
 });
 
 interface ConversionResponse {
@@ -41,7 +49,7 @@ async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
       timeout: 10000,
     });
 
-    const html = response.data;
+    const html = response.data as string;
     const $ = cheerio.load(html);
 
     // Extract title
@@ -111,7 +119,7 @@ export default async (req: VercelRequest, res: VercelResponse): Promise<void> =>
   // Extract URL from query or body
   const url = req.method === 'GET' 
     ? (req.query.url as string)
-    : (req.body?.url as string);
+    : (req.body as { url?: string } | undefined)?.url;
 
   if (!url) {
     res.status(400).json({
