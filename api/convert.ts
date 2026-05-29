@@ -12,20 +12,12 @@ const turndownService = new TurndownService({
 // Add custom rules for better markdown conversion
 turndownService.addRule('strikethrough', {
   filter: ['s', 'strike', 'del'],
-  replacement: (_content: string, _node) => {
-    const node = _node as cheerio.Element;
-    const text = (node as unknown as { textContent: string }).textContent || '';
-    return `~~${text}~~`;
-  },
+  replacement: (content: string) => content,
 });
 
 turndownService.addRule('highlight', {
   filter: ['mark'],
-  replacement: (_content: string, _node) => {
-    const node = _node as cheerio.Element;
-    const text = (node as unknown as { textContent: string }).textContent || '';
-    return `==${text}==`;
-  },
+  replacement: (content: string) => content,
 });
 
 interface ConversionResponse {
@@ -42,14 +34,14 @@ async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
     new URL(url);
     
     // Fetch the HTML content
-    const response = await axios.get(url, {
+    const response = await axios.get<string>(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
       timeout: 10000,
     });
 
-    const html = response.data as string;
+    const html = response.data;
     const $ = cheerio.load(html);
 
     // Extract title
@@ -75,8 +67,8 @@ async function fetchAndConvertHTML(url: string): Promise<ConversionResponse> {
 
     // Clean up excessive whitespace and newlines
     markdown = markdown
-      .replace(/\n\n\n+/g, '\n\n') // Remove excessive blank lines
-      .replace(/^ +/gm, '') // Remove leading spaces
+      .replace(/\n\n\n+/g, '\n\n')
+      .replace(/^ +/gm, '')
       .trim();
 
     // Add title as H1 if not already present
@@ -118,31 +110,23 @@ export default async (req: VercelRequest, res: VercelResponse): Promise<void> =>
 
   // Extract URL from query or body
   const url = req.method === 'GET' 
-    ? (req.query.url as string)
-    : (req.body as { url?: string } | undefined)?.url;
+    ? (req.query.url as string | undefined)
+    : (req.body as Record<string, unknown> | undefined)?.url as string | undefined;
 
   if (!url) {
     res.status(400).json({
-      error: 'Missing URL parameter. Please provide a "url" query parameter or in the request body.',
+      error: 'Missing URL parameter',
       example: '/api/convert?url=https://example.com',
     });
     return;
   }
 
-  try {
-    const result = await fetchAndConvertHTML(url);
-    
-    if (!result.success) {
-      res.status(400).json(result);
-      return;
-    }
-
-    res.status(200).json(result);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({
-      error: 'Internal server error',
-      message: errorMessage,
-    });
+  const result = await fetchAndConvertHTML(url);
+  
+  if (!result.success) {
+    res.status(400).json(result);
+    return;
   }
+
+  res.status(200).json(result);
 };
